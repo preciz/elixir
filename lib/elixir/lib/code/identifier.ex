@@ -63,9 +63,11 @@ defmodule Code.Identifier do
   # Example of this format: -NAME/ARITY-fun-COUNT-
   def extract_anonymous_fun_parent(atom) when is_atom(atom) do
     with "-" <> rest <- Atom.to_string(atom),
-         [trailing | reversed] = rest |> String.split("/") |> Enum.reverse(),
+         [_ | _] = matches <- :binary.matches(rest, "/"),
+         {index, 1} = List.last(matches),
+         trailing = binary_part(rest, index + 1, byte_size(rest) - (index + 1)),
          [arity, _inner, _count, ""] <- String.split(trailing, "-") do
-      {reversed |> Enum.reverse() |> Enum.join("/") |> String.to_atom(), arity}
+      {binary_part(rest, 0, index) |> String.to_atom(), arity}
     else
       _ -> :error
     end
