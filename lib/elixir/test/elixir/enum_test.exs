@@ -2171,6 +2171,7 @@ defmodule EnumTest.Range do
     assert Enum.min_max(1..9//2) == {1, 9}
     assert Enum.min_max(1..10//2) == {1, 9}
     assert Enum.min_max(-1..-9//-2) == {-9, -1}
+    assert Enum.min_max(10..1//-2) == {2, 10}
 
     assert_raise Enum.EmptyError, fn -> Enum.min_max(1..0//1) end
   end

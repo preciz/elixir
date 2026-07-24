@@ -2245,7 +2245,7 @@ defmodule Enum do
 
       _ ->
         last = last - rem(last - first, step)
-        {Kernel.min(first, last), Kernel.max(first, last)}
+        if step > 0, do: {first, last}, else: {last, first}
     end
   end
 
