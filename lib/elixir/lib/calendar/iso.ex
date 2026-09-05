@@ -2024,8 +2024,8 @@ defmodule Calendar.ISO do
     total = System.convert_time_unit(integer, unit, :microsecond)
 
     if total in @unix_range_microseconds do
-      microseconds = Integer.mod(total, @microseconds_per_second)
-      seconds = @unix_epoch + floor_div_positive_divisor(total, @microseconds_per_second)
+      {seconds, microseconds} = div_rem(total, @microseconds_per_second)
+      seconds = @unix_epoch + seconds
       precision = precision_for_unit(unit)
       {date, time} = iso_seconds_to_datetime(seconds)
       {:ok, date, time, {microseconds, precision}}
