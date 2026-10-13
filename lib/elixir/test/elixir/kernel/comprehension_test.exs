@@ -214,6 +214,36 @@ defmodule Kernel.ComprehensionTest do
             end) == <<0::size(2), 1::size(1), 2::size(2), 3::size(1)>>
   end
 
+  test "for comprehensions evaluate the binary prefix before generators" do
+    Process.put(:prefix_value, 1)
+
+    assert for(
+             <<(x <- <<Process.get(:prefix_value)>>)>>,
+             into: <<Process.put(:prefix_value, 2)::1>>,
+             do: <<x>>
+           ) == <<1::1, 2>>
+  end
+
+  test "for comprehensions can use variables bound in the binary prefix" do
+    assert Code.eval_quoted(
+             quote do
+               for <<(x <- <<prefix>>)>>,
+                 into: <<prefix = 2>>,
+                 do: :erlang.list_to_binary([prefix + x])
+             end
+           ) == {<<2, 4>>, []}
+  end
+
+  test "for comprehensions into non-empty binary raise on non-bitstring values" do
+    assert_raise ArgumentError, fn ->
+      for x <- [1], into: "a", do: Process.get(:unused, x)
+    end
+
+    assert_raise ArgumentError, fn ->
+      for <<(x <- <<1>>)>>, into: <<1::1>>, do: Process.get(:unused, x)
+    end
+  end
+
   test "for comprehensions into dynamic binary" do
     enum = 0..3
     into = ""

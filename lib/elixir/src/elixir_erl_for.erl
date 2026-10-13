@@ -120,7 +120,7 @@ collect_filters([], Acc) ->
 
 build_inline(Ann, Clauses, Expr, Into, Uniq, InitVars, S) ->
   case not Uniq and lists:all(fun(Clause) -> element(1, Clause) == bin end, Clauses) of
-    true  -> {build_comprehension(Ann, Clauses, Expr, Into), S};
+    true  -> build_comprehension(Ann, Clauses, Expr, Into, S);
     false -> build_inline_each(Ann, Clauses, Expr, Into, Uniq, InitVars, S)
   end.
 
@@ -159,7 +159,9 @@ build_inline_each(Ann, Clauses, Expr, {bin, _, []}, Uniq, InitVars, S) ->
   end,
 
   {ReduceExpr, SR} = build_reduce(Ann, Clauses, InnerFun, Expr, {nil, Ann}, Uniq, InitVars, SV),
-  {?remote(Ann, erlang, list_to_bitstring, [ReduceExpr]), SR}.
+  {?remote(Ann, erlang, list_to_bitstring, [ReduceExpr]), SR};
+build_inline_each(Ann, Clauses, Expr, {bin, _, _} = Into, Uniq, InitVars, S) ->
+  build_into(Ann, Clauses, Expr, Into, Uniq, InitVars, S).
 
 build_into(Ann, Clauses, Expr, {map, _, []}, Uniq, InitVars, S) ->
   {ReduceExpr, SR} = build_inline_each(Ann, Clauses, Expr, {nil, Ann}, Uniq, InitVars, S),
@@ -335,8 +337,18 @@ valid_var_size({op, _Ann, _Op, Left, Right}, Vars) ->
   valid_var_size(Left, Vars) andalso valid_var_size(Right, Vars);
 valid_var_size(_Size, _vars) -> false.
 
-build_comprehension(Ann, Clauses, Expr, Into) ->
-  {comprehension_kind(Into), Ann, Expr, comprehension_clause(Clauses)}.
+build_comprehension(Ann, Clauses, Expr, {bin, _, [_ | _]} = Into, S) ->
+  {Prefix, SP} = build_var(Ann, S),
+  {Tail, ST} = build_comprehension(Ann, Clauses, Expr, {bin, Ann, []}, SP),
+
+  Result = {bin, Ann, [
+    {bin_element, Ann, Prefix, default, [bitstring]},
+    {bin_element, Ann, Tail, default, [bitstring]}
+  ]},
+
+  {{block, Ann, [{match, Ann, Prefix, Into}, Result]}, ST};
+build_comprehension(Ann, Clauses, Expr, Into, S) ->
+  {{comprehension_kind(Into), Ann, Expr, comprehension_clause(Clauses)}, S}.
 
 comprehension_clause([{bin, Meta, Left, Right, Filters} | T]) ->
   Ann = ?ann(Meta),
@@ -350,7 +362,7 @@ comprehension_kind(false) -> lc;
 comprehension_kind({nil, _}) -> lc;
 comprehension_kind({bin, _, []}) -> bc.
 
-inline_or_into({bin, _, []}) -> inline;
+inline_or_into({bin, _, _}) -> inline;
 inline_or_into({nil, _}) -> inline;
 inline_or_into(false) -> inline;
 inline_or_into(_) -> into.
