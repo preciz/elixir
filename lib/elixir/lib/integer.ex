@@ -359,50 +359,53 @@ defmodule Integer do
   end
 
   def parse(binary, base) when is_binary(binary) and base in 2..36 do
-    case count_digits(binary, base) do
-      0 ->
+    case count_rem(binary, base) do
+      :error ->
         :error
 
-      count when count == byte_size(binary) ->
+      :all ->
         {:erlang.binary_to_integer(binary, base), ""}
 
-      count ->
-        {digits, rem} = :erlang.split_binary(binary, count)
+      rem_size ->
+        count = byte_size(binary) - 1 - rem_size
+        <<digits::binary-size(^count), rem::binary>> = binary
         {:erlang.binary_to_integer(digits, base), rem}
     end
   end
 
-  defp count_digits(<<sign, rest::bits>>, base) when sign in ~c"+-" do
-    case count_digits_nosign(rest, base, 1) do
-      1 -> 0
-      count -> count
-    end
-  end
+  defguardp valid_digit?(char, base)
+            when (char in ?0..?9 and char - ?0 < base) or
+                   (:erlang.bor(char, 32) >= ?a and :erlang.bor(char, 32) - (?a - 10) < base)
 
-  defp count_digits(<<char, rest::bits>>, 10 = base) do
-    if char in ?0..?9, do: count_digits_nosign(rest, base, 1), else: 0
-  end
+  @compile {:inline, count_rem: 3}
 
-  defp count_digits_nosign(<<char, rest::bits>>, 10 = base, count) do
-    if char in ?0..?9, do: count_digits_nosign(rest, base, count + 1), else: count
-  end
+  defp count_rem(<<char, rest::bits>>, base) when char not in ~c"+-",
+    do: count_rem(rest, char, base)
 
-  digits = [{?0..?9, ?0}, {?A..?Z, ?A - 10}, {?a..?z, ?a - 10}]
+  defp count_rem(<<_sign, char, rest::bits>>, base),
+    do: count_rem(rest, char, base)
 
-  for {chars, offset} <- digits do
-    defp count_digits(<<char, rest::bits>>, base)
-         when char in unquote(Macro.escape(chars)) and char - unquote(offset) < base do
-      count_digits_nosign(rest, base, 1)
-    end
+  defp count_rem(<<_::bits>>, _base), do: :error
 
-    defp count_digits_nosign(<<char, rest::bits>>, base, count)
-         when char in unquote(Macro.escape(chars)) and char - unquote(offset) < base do
-      count_digits_nosign(rest, base, count + 1)
-    end
-  end
+  defp count_rem(rest, char, 10) when char in ?0..?9,
+    do: count_rem_nosign(rest)
 
-  defp count_digits(<<_::bits>>, _), do: 0
-  defp count_digits_nosign(<<_::bits>>, _, count), do: count
+  defp count_rem(rest, char, base) when base != 10 and valid_digit?(char, base),
+    do: count_rem_nosign(rest, base)
+
+  defp count_rem(_rest, _char, _base), do: :error
+
+  defp count_rem_nosign(<<char, rest::bits>>) when char in ?0..?9,
+    do: count_rem_nosign(rest)
+
+  defp count_rem_nosign(<<_, rest::bits>>), do: byte_size(rest)
+  defp count_rem_nosign(<<_::bits>>), do: :all
+
+  defp count_rem_nosign(<<char, rest::bits>>, base) when valid_digit?(char, base),
+    do: count_rem_nosign(rest, base)
+
+  defp count_rem_nosign(<<_, rest::bits>>, _base), do: byte_size(rest)
+  defp count_rem_nosign(<<_::bits>>, _base), do: :all
 
   @doc """
   Returns a binary which corresponds to the text representation
